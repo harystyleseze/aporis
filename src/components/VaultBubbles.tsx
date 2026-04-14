@@ -237,7 +237,7 @@ export function VaultBubbles({ vaults, onSelectVault, onDeposit, selectedVault }
 
           return (
             <g
-              key={b.vault.slug}
+              key={`${b.vault.slug}-${b.vault.address}`}
               style={{ cursor: dimmed ? 'default' : 'pointer' }}
               onMouseEnter={() => !dimmed && setHoveredSlug(b.vault.slug)}
               onClick={() => !dimmed && onSelectVault(b.vault)}

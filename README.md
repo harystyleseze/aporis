@@ -31,12 +31,14 @@
 
 Aporis replaces protocol-hopping and manual yield farming with an intelligent terminal that:
 
-1. **Discovers** 590+ vaults across Aave, Morpho, Euler, Pendle, and 7 other protocols in real time
-2. **Analyzes risk** through a transparent 5-factor scoring engine (TVL depth, APY stability, protocol trust, liquidity access, yield sustainability)
-3. **Calculates net yield** — the actual return after gas and protocol fees, not just nominal APY
-4. **Optimizes allocation** — input your amount, asset, and risk tolerance, and the engine finds the best vault ranked by net APY
-5. **Executes deposits** in one click via LI.FI Composer (swap + bridge + deposit in a single transaction)
-6. **Tracks positions** and detects idle assets sitting in your wallet not earning yield
+1. **Discovers** 590+ vaults across Aave, Morpho, Euler, Pendle, and 7 other protocols — with an interactive bubble chart and sortable table
+2. **Analyzes risk** through a transparent 5-factor scoring engine with SVG radar chart, plus LLM-generated risk narratives via Groq
+3. **Calculates net yield** — the actual return after real-time gas estimates (from `/v1/gas/suggestion`) and protocol fees, not just nominal APY
+4. **Warns about bad trades** — flags when transaction costs exceed deposit amount or when net yield is negative
+5. **Optimizes allocation** — input your amount, asset, and risk tolerance, and the engine finds the best vault ranked by net APY with AI-generated recommendations
+6. **Executes deposits** with automatic token approval and one-click execution via LI.FI Composer — supports same-chain and cross-chain (bridge + deposit atomically)
+7. **Tracks positions** and detects idle assets, with on-chain verification of vault balances
+8. **Withdraws** directly from the portfolio panel — reads actual on-chain LP token balance, handles approval, and executes via Composer
 
 ---
 
@@ -56,20 +58,21 @@ The intelligence isn't behind a chatbot — it's embedded in every pixel of the 
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        YIELDPILOT                               │
+│                          APORIS                                  │
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │                    PRESENTATION LAYER                      │  │
 │  │                                                            │  │
-│  │  Header ─── SmartSearch ─── ApiCounter ─── WalletConnect  │  │
+│  │  Header ─── SmartSearch ─── ApiCounter ─── Reown AppKit    │  │
 │  │  HeroStats (4 live metric cards)                           │  │
 │  │                                                            │  │
 │  │  ┌─── Left Column ────────┐  ┌─── Right Column ────────┐  │  │
 │  │  │ YieldOptimizer         │  │ RiskRadar (SVG)          │  │  │
-│  │  │ VaultTable (sortable)  │  │ NetYieldBar (SVG)        │  │  │
-│  │  │ DepositModal           │  │ MarketIntel              │  │  │
-│  │  └────────────────────────┘  │ PortfolioPanel           │  │  │
-│  │                              └──────────────────────────┘  │  │
+│  │  │ VaultBubbles (chart)   │  │ NetYieldBar (SVG)        │  │  │
+│  │  │ VaultTable (sortable)  │  │ MarketIntel              │  │  │
+│  │  │ DepositModal           │  │ PortfolioPanel           │  │  │
+│  │  │ WithdrawModal          │  │                          │  │  │
+│  │  └────────────────────────┘  └──────────────────────────┘  │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                              │                                   │
 │  ┌───────────────────────────────────────────────────────────┐  │
@@ -79,6 +82,7 @@ The intelligence isn't behind a chatbot — it's embedded in every pixel of the 
 │  │  optimizer.ts ─────── Net yield calc + vault ranking       │  │
 │  │  risk-engine.ts ───── 5-axis risk scoring + radar scores   │  │
 │  │  market-intel.ts ──── Insight generation from aggregates   │  │
+│  │  llm.ts ──────────── AI narratives via Groq (configurable) │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                              │                                   │
 │  ┌───────────────────────────────────────────────────────────┐  │
@@ -95,17 +99,17 @@ The intelligence isn't behind a chatbot — it's embedded in every pixel of the 
               │                │                  │
               ▼                ▼                  ▼
     ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-    │  LI.FI Earn  │  │ LI.FI        │  │   User's     │
-    │  Data API    │  │ Composer     │  │   Wallet     │
-    │              │  │              │  │              │
-    │ earn.li.fi   │  │ li.quest     │  │  wagmi +     │
-    │ No auth      │  │ API key opt  │  │  RainbowKit  │
-    │              │  │              │  │              │
-    │ • Vaults     │  │ • Quote      │  │ • Sign tx    │
-    │ • Chains     │  │ • Execute    │  │ • Switch     │
-    │ • Protocols  │  │ • Status     │  │   chain      │
-    │ • Portfolio  │  │              │  │ • Balances   │
-    └──────────────┘  └──────────────┘  └──────────────┘
+    │  LI.FI Earn  │  │ LI.FI        │  │   User's     │  │  LLM         │
+    │  Data API    │  │ Composer     │  │   Wallet     │  │  (Groq)      │
+    │              │  │              │  │              │  │              │
+    │ earn.li.fi   │  │ li.quest     │  │  wagmi +     │  │ Configurable │
+    │ No auth      │  │ API key opt  │  │  Reown       │  │ via env vars │
+    │              │  │              │  │  AppKit      │  │              │
+    │ • Vaults     │  │ • Quote      │  │ • Sign tx    │  │ • Risk       │
+    │ • Chains     │  │ • Execute    │  │ • Approve    │  │   narratives │
+    │ • Protocols  │  │ • Status     │  │ • Switch     │  │ • Yield      │
+    │ • Portfolio  │  │ • Gas est.   │  │   chain      │  │   recommend. │
+    └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
 ```
 
 ---
@@ -264,7 +268,7 @@ Aporis is on the **AI x Earn** track. The AI is embedded in the product, not wra
 | *"monitors positions and auto-rebalances"* | **Portfolio Panel + Idle Detection** | Shows positions, flags idle assets, suggests deployment |
 
 ### 1. Smart Search — Natural Language to Filters
-Type `"safe USDC vaults on Base above 5%"` and watch it parse into structured filters: `[USDC] [Base] [Low Risk] [>5% APY]`. Deterministic NLP — no LLM API call needed, instant results.
+Type `"safe USDC vaults on Base above 5%"` and watch it parse into structured filters: `[USDC] [Base] [Low Risk] [>5% APY]`. Deterministic NLP for instant results — no latency, no API cost.
 
 ### 2. Yield Optimizer — Agent That Auto-Allocates
 Enter your deposit amount, select an asset, choose your risk tolerance. The optimizer scans all matching vaults, scores them by **net APY** (not nominal), and recommends the top 3 with one-click deposit.
@@ -288,13 +292,16 @@ Every vault gets a risk analysis displayed as a custom SVG radar chart with 5 di
          Trust
 ```
 
-Each factor explained in plain English — no black-box scores.
+Each factor explained in plain English. Click **"AI analysis →"** on any vault for a contextual risk narrative generated by Llama 3.3 70B via Groq.
 
-### 4. Market Intelligence — Auto-Generated Insights
+### 4. AI-Generated Recommendations
+When the Yield Optimizer finds the best vault, an LLM generates a recommendation explaining why this vault fits the user's deposit amount and risk tolerance. Runs server-side via `/api/analyze` to protect the API key.
+
+### 5. Market Intelligence — Auto-Generated Insights
 Computed from real vault data: stablecoin yield trends, best low-risk opportunities, protocol dominance, yield direction vs 30-day averages.
 
-### 5. Idle Asset Detection
-When wallet connected, portfolio panel checks for assets earning 0% and proactively suggests vaults to deploy idle capital.
+### 6. Idle Asset Detection + Withdraw
+When wallet connected, portfolio panel shows active positions with a **Withdraw** button. Detects idle assets and suggests vaults. Withdrawal uses on-chain balance verification to find the correct vault LP token, handles approval, and executes via Composer.
 
 ---
 
@@ -332,10 +339,12 @@ When wallet connected, portfolio panel checks for assets earning 0% and proactiv
 | 3 | Earn | `/v1/earn/chains` | GET | Chain filter dropdown | 1 |
 | 4 | Earn | `/v1/earn/protocols` | GET | Protocol filter dropdown | 1 |
 | 5 | Earn | `/v1/earn/portfolio/:addr/positions` | GET | User's yield positions | 1 (on wallet connect) |
-| 6 | Composer | `/v1/quote` | GET | Deposit transaction quote | On deposit click |
-| 7 | Composer | `/v1/status` | GET | Transaction tracking | On deposit confirm |
+| 6 | Composer | `/v1/quote` | GET | Deposit/withdraw transaction quote | On deposit or withdraw |
+| 7 | Composer | `/v1/status` | GET | Transaction tracking | After tx confirmed |
+| 8 | Composer | `/v1/gas/suggestion/{chainId}` | GET | Real-time gas cost per chain | On page load (per chain) |
+| 9 | Internal | `/api/analyze` | POST | LLM risk narrative + recommendations | On AI analysis click |
 
-**Total: 7 unique endpoints across 2 services, ~12 API calls per page load.**
+**Total: 8 LI.FI endpoints across 2 services + 1 internal LLM route, ~20+ API calls per session.**
 
 ### Net Yield Calculation
 
@@ -379,10 +388,10 @@ The hackathon scores across 4 dimensions. Here's how Aporis maps to each:
 | What Judges Look For | What Aporis Does |
 |---|---|
 | Unique approach | Net APY calculation — nobody else subtracts real fees from yield |
-| Creative problem solving | Smart Search parses natural language without an LLM |
+| Creative problem solving | Smart Search (NLP), LLM risk narratives, interactive bubble chart |
 | Novel visualization | Custom SVG radar chart for 5-axis risk analysis |
 | Not "just a dashboard" | Intelligence engine: risk scoring, optimization, market insights |
-| AI integration | 5 AI features embedded in product UX (not a chatbot) |
+| AI integration | 6 AI features embedded in product UX + LLM narratives (not a chatbot) |
 
 ### Product Completeness — 20%
 
@@ -392,7 +401,7 @@ The hackathon scores across 4 dimensions. Here's how Aporis maps to each:
 | Handles edge cases | Null APY, zero TVL, empty portfolio, no matching vaults |
 | Functional, not mockup | Deployed app with real API data and real deposit execution |
 | Professional finish | Dark terminal aesthetic, smooth animations, responsive layout |
-| Wallet integration | RainbowKit with 12 chain support, auto chain switching |
+| Wallet integration | Reown AppKit with EIP-6963 multi-wallet discovery, 12 chains |
 
 ### Presentation — 20%
 
@@ -413,7 +422,7 @@ The hackathon scores across 4 dimensions. Here's how Aporis maps to each:
 | UI Library | React | 19.2 |
 | Language | TypeScript | 5 |
 | Styling | Tailwind CSS | 4 |
-| Wallet | wagmi + viem + RainbowKit | v3 / v2 / v2 |
+| Wallet | wagmi + viem + Reown AppKit | v3 / v2 / v1 |
 | State | TanStack React Query | 5 |
 | Visualizations | Custom SVG (no chart library) | — |
 | Typography | Geist Mono | — |
@@ -430,7 +439,7 @@ aporis/
 │   │   ├── page.tsx              # Single-page terminal dashboard
 │   │   ├── layout.tsx            # Dark theme + Geist Mono font
 │   │   ├── globals.css           # Trading terminal palette, grid background, animations
-│   │   └── providers.tsx         # Wagmi + RainbowKit + React Query providers
+│   │   └── providers.tsx         # Wagmi + Reown AppKit + React Query providers
 │   │
 │   ├── components/               # UI components (10 total)
 │   │   ├── Header.tsx            # Logo + live API call counter + wallet connect
@@ -441,16 +450,19 @@ aporis/
 │   │   ├── RiskRadar.tsx         # SVG 5-axis pentagon radar chart
 │   │   ├── NetYieldBar.tsx       # SVG waterfall bars (nominal → costs → net)
 │   │   ├── MarketIntel.tsx       # Auto-generated market insight feed
-│   │   ├── PortfolioPanel.tsx    # Wallet positions + idle asset detection
-│   │   └── DepositModal.tsx      # Composer quote → fee preview → execute → track
+│   │   ├── VaultBubbles.tsx      # Interactive bubble chart with chain/asset filters
+│   │   ├── PortfolioPanel.tsx    # Positions + idle assets + withdraw button
+│   │   ├── DepositModal.tsx      # Approval → quote → cross-chain → execute → track
+│   │   └── WithdrawModal.tsx     # On-chain balance → approval → withdraw via Composer
 │   │
 │   ├── lib/                      # Business logic + API client (7 modules)
 │   │   ├── api.ts                # LI.FI API client (both services) + call counter
 │   │   ├── risk-engine.ts        # 5-factor risk scoring + radar chart scores
-│   │   ├── optimizer.ts          # Net yield calculator + findBestVaults algorithm
+│   │   ├── optimizer.ts          # Chain-aware net yield calculator + vault ranking
 │   │   ├── search-parser.ts      # Natural language → SearchFilters parsing
 │   │   ├── market-intel.ts       # Insight generation from vault data aggregates
-│   │   ├── wagmi.ts              # Wallet configuration (12 EVM chains)
+│   │   ├── llm.ts                # LLM integration (Groq, configurable via env)
+│   │   ├── wagmi.ts              # Wallet config via Reown AppKit (12 EVM chains)
 │   │   └── utils.ts              # cn, formatUsd, formatApy, parseTvl, shortenAddress
 │   │
 │   ├── hooks/
@@ -466,7 +478,7 @@ aporis/
 └── README.md
 ```
 
-**24 source files. Zero external chart libraries. Zero mock data. Zero LLM API dependencies.**
+**27 source files. Zero external chart libraries. Zero mock data. LLM via configurable OpenAI-compatible endpoint (default: Groq free tier).**
 
 ---
 
@@ -506,66 +518,3 @@ Open [http://localhost:3000](http://localhost:3000).
 npm run build     # Production build
 npx vercel        # Deploy to Vercel
 ```
-
----
-
-## What I'd Build Next
-
-If development continued beyond the hackathon:
-
-1. **Cross-chain deposit comparison** — Show fee estimates from multiple source chains so users pick the cheapest route to any vault
-2. **APY alerts** — Notify users when vault APY drops below a threshold or when a better opportunity appears
-3. **Historical APY charts** — Time-series visualization using the apy1d/apy7d/apy30d data to show yield trends
-4. **Auto-rebalancing agent** — Monitor positions and suggest or execute moves when net yield favors a different vault
-5. **Reward harvesting** — Aggregate unclaimed rewards across protocols and enable batch claiming
-6. **Tax export** — Generate CSV reports categorizing yield income vs capital gains from portfolio events
-7. **Mobile-responsive optimization** — Stack panels vertically and optimize touch targets for mobile users
-
----
-
-## API Feedback
-
-### What worked well
-- **Two-service split** (discovery vs execution) is clean and intuitive — separation of concerns makes integration logical
-- **No auth on Earn Data API** makes prototyping fast — could start building immediately without portal registration
-- **Cursor-based pagination** handles 590+ vaults gracefully — predictable, no offset drift
-- **`isTransactional` flag** clearly indicates which vaults support Composer deposits — prevents dead-end UX
-- **Vault `tags`** (stablecoin, il-risk) enable meaningful risk analysis with minimal effort
-- **Composer `toToken = vault address`** pattern is elegant — one parameter unlocks vault deposits
-
-### Suggestions for improvement
-- **`apy.reward`** is often `0` instead of `null` — documenting the semantic difference would help (is 0% reward intentional, or just no data?)
-- **`apy1d` and `apy7d`** are frequently `null` even for established vaults — limits trend analysis; a fallback or interpolated value would help
-- **Vault risk score** from LI.FI's side (even basic: audit status, age, TVL tier) would complement third-party analysis
-- **Webhook/SSE support** for deposit completion would eliminate status polling
-- **Endpoint for vault historical APY** time-series — would enable sparkline charts and trend detection without storing snapshots client-side
-
----
-
-## Submission Info
-
-| Field | Value |
-|-------|-------|
-| **Project** | Aporis |
-| **Track** | AI x Earn |
-| **Team size** | Solo |
-| **Built with** | Next.js 16, React 19, TypeScript, Tailwind CSS 4, wagmi, RainbowKit |
-| **APIs used** | LI.FI Earn Data API (earn.li.fi) + LI.FI Composer (li.quest) |
-| **Hackathon** | [DeFi Mullet #1](https://li.fi/) |
-| **Registration** | [forms.gle/RFLGG8RiEKC3AqnQA](https://forms.gle/RFLGG8RiEKC3AqnQA) |
-| **Submission form** | [forms.gle/1PCvD9BymH1EyRmV8](https://forms.gle/1PCvD9BymH1EyRmV8) |
-
-### Submission Checklist
-
-- [ ] Working demo (deployed app or screen-recorded video)
-- [ ] Public tweet posted during submission window (April 14, 09:00–12:00 ET or APAC)
-  - Includes: project name + description + demo video + repo link + track
-  - Tags: @lifiprotocol @kenny_io
-  - Text: "I just built Aporis with LI.FI Earn…"
-- [ ] Google Form submitted with all required fields
-
----
-
-## License
-
-MIT

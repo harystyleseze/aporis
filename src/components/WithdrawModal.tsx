@@ -76,6 +76,7 @@ export function WithdrawModal({ position, vaultAddress, onClose }: Props) {
           abi: [{ name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }] as const,
           functionName: 'balanceOf',
           args: [address as `0x${string}`],
+          chainId: position.chainId,
         });
         // Use 99% to avoid rounding
         withdrawAmount = ((balance * 99n) / 100n).toString();
@@ -90,7 +91,7 @@ export function WithdrawModal({ position, vaultAddress, onClose }: Props) {
         return;
       }
 
-      const q = await fetchQuote({
+      let q = await fetchQuote({
         fromChain: position.chainId,
         toChain: position.chainId,
         fromToken: vaultAddress,
@@ -111,6 +112,7 @@ export function WithdrawModal({ position, vaultAddress, onClose }: Props) {
             abi: [{ name: 'allowance', type: 'function', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }] as const,
             functionName: 'allowance',
             args: [address as `0x${string}`, approvalAddress as `0x${string}`],
+            chainId: position.chainId,
           });
 
           if (allowance < BigInt(withdrawAmount)) {
@@ -123,6 +125,18 @@ export function WithdrawModal({ position, vaultAddress, onClose }: Props) {
               chainId: position.chainId,
             });
             await waitForTxReceipt(config, { hash: approveTxHash, confirmations: 1 });
+
+            // Re-fetch quote after approval (original may be stale)
+            q = await fetchQuote({
+              fromChain: position.chainId,
+              toChain: position.chainId,
+              fromToken: vaultAddress,
+              toToken: position.asset.address,
+              fromAddress: address,
+              fromAmount: withdrawAmount,
+              slippage: 0.01,
+            });
+            setQuote(q);
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : '';
@@ -131,9 +145,22 @@ export function WithdrawModal({ position, vaultAddress, onClose }: Props) {
             setStep('error');
             return;
           }
-          // If allowance check fails, try proceeding without approval — it might already be approved
         }
       }
+
+      // Always re-fetch quote before executing (quotes go stale in seconds)
+      try {
+        q = await fetchQuote({
+          fromChain: position.chainId,
+          toChain: position.chainId,
+          fromToken: vaultAddress,
+          toToken: position.asset.address,
+          fromAddress: address,
+          fromAmount: withdrawAmount,
+          slippage: 0.01,
+        });
+        setQuote(q);
+      } catch { /* use existing quote as fallback */ }
 
       setStep('signing');
       const txReq: Record<string, unknown> = {

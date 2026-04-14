@@ -189,62 +189,75 @@ export function DepositModal({ vault, onClose }: Props) {
         await switchChainAsync({ chainId: txChainId });
       }
 
-      // Step 1: Check token allowance and approve if needed
+      // Step 1: Check allowance, approve only if needed
       const approvalAddress = (quote.estimate as Record<string, unknown>).approvalAddress as string | undefined;
       const fromTokenAddr = quote.action.fromToken.address as `0x${string}`;
       const depositAmountBig = BigInt(quote.action.fromAmount);
+      let needsRefresh = false;
 
       if (approvalAddress && fromTokenAddr !== '0x0000000000000000000000000000000000000000') {
-        setStep('approving');
-
-        // Read current allowance
-        const allowanceResult = await fetch(
-          `https://li.quest/v1/token?chain=${txChainId}&token=${fromTokenAddr}`,
-        ).catch(() => null); // We'll just approve anyway if this fails
-
-        // Send approval tx — approve max uint256 so user doesn't need to re-approve
+        const { readContract: rc } = await import('@wagmi/core');
         try {
-          const approveTxHash = await writeContractAsync({
+          const allowance = await rc(config, {
             address: fromTokenAddr,
-            abi: ERC20_ABI,
-            functionName: 'approve',
-            args: [approvalAddress as `0x${string}`, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')],
+            abi: [{ name: 'allowance', type: 'function', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }] as const,
+            functionName: 'allowance',
+            args: [address as `0x${string}`, approvalAddress as `0x${string}`],
             chainId: txChainId,
           });
 
-          // Wait for approval to be mined using wagmi's built-in receipt polling
-          const approvalReceipt = await waitForTxReceipt(config, {
-            hash: approveTxHash,
-            confirmations: 1,
-          });
-
-          if (approvalReceipt.status !== 'success') {
-            setError('Approval transaction reverted on-chain. Please try again.');
-            setStep('error');
-            return;
+          if (allowance < depositAmountBig) {
+            setStep('approving');
+            const approveTxHash = await writeContractAsync({
+              address: fromTokenAddr,
+              abi: ERC20_ABI,
+              functionName: 'approve',
+              args: [approvalAddress as `0x${string}`, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')],
+              chainId: txChainId,
+            });
+            await waitForTxReceipt(config, { hash: approveTxHash, confirmations: 1 });
+            needsRefresh = true; // Quote may be stale after approval wait
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : '';
           if (msg.includes('User rejected') || msg.includes('user rejected')) {
             setError('Approval rejected in wallet.');
-          } else {
-            setError('Token approval failed. Please try again.');
+            setStep('error');
+            return;
           }
-          setStep('error');
-          return;
+          // If allowance check fails, proceed — it might already be approved
         }
       }
 
-      // Step 2: Send deposit transaction
+      // Step 2: Always re-fetch quote before executing (quotes go stale in seconds)
+      let finalQuote = quote;
+      try {
+        const baseUnits = BigInt(Math.floor(amountNum * 10 ** decimals)).toString();
+        const fromToken = resolveFromToken(token.symbol, token.address, chainId, vault.chainId);
+        finalQuote = await fetchQuote({
+          fromChain: chainId,
+          toChain: vault.chainId,
+          fromToken,
+          toToken: vault.address,
+          fromAddress: address,
+          fromAmount: baseUnits,
+          slippage: 0.005,
+        });
+        setQuote(finalQuote);
+      } catch {
+        // If refresh fails, try with original quote
+      }
+
+      // Step 3: Send deposit transaction
       setStep('signing');
 
       const txReq: Record<string, unknown> = {
-        to: quote.transactionRequest.to as `0x${string}`,
-        data: quote.transactionRequest.data as `0x${string}`,
-        value: BigInt(quote.transactionRequest.value || '0'),
-        chainId: txChainId,
+        to: finalQuote.transactionRequest.to as `0x${string}`,
+        data: finalQuote.transactionRequest.data as `0x${string}`,
+        value: BigInt(finalQuote.transactionRequest.value || '0'),
+        chainId: finalQuote.transactionRequest.chainId || txChainId,
       };
-      const rawTx = quote.transactionRequest as Record<string, unknown>;
+      const rawTx = finalQuote.transactionRequest as Record<string, unknown>;
       if (rawTx.gasLimit) {
         txReq.gas = BigInt(rawTx.gasLimit as string);
       }
