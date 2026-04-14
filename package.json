@@ -1,17 +1,26 @@
 {
-  "name": "yieldpilot",
+  "name": "aporis",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@lifi/sdk": "^3.16.3",
+    "@rainbow-me/rainbowkit": "^2.2.10",
+    "@tanstack/react-query": "^5.99.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.8.0",
     "next": "16.2.3",
+    "openai": "^6.34.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tailwind-merge": "^3.5.0",
+    "viem": "^2.47.16",
+    "wagmi": "^3.6.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
