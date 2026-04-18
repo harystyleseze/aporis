@@ -1,5 +1,5 @@
 // LI.FI API Client — Earn Data API + Composer + SDK
-// earn.li.fi (no auth) | li.quest (optional key) | @lifi/sdk (token data)
+// earn.li.fi (API key required) | li.quest (API key required) | @lifi/sdk
 
 import { createConfig } from '@lifi/sdk';
 import type {
@@ -27,6 +27,14 @@ export function getApiStats() {
   return { calls: apiCallCount, endpoints: endpointsUsed.size };
 }
 
+// ── Shared auth header (required for both services) ────
+function apiHeaders(): Record<string, string> {
+  const h: Record<string, string> = {};
+  const key = process.env.NEXT_PUBLIC_LIFI_API_KEY;
+  if (key) h['x-lifi-api-key'] = key;
+  return h;
+}
+
 // ── Earn Data API (5 endpoints) ────────────────────────
 
 export async function fetchVaults(params?: {
@@ -47,22 +55,22 @@ export async function fetchVaults(params?: {
   if (params?.limit) sp.set('limit', String(params.limit));
   if (params?.cursor) sp.set('cursor', params.cursor);
 
-  const url = tracked('earn/vaults', `${EARN_BASE}/v1/earn/vaults?${sp}`);
-  const res = await fetch(url);
+  const url = tracked('earn/vaults', `${EARN_BASE}/v1/vaults?${sp}`);
+  const res = await fetch(url, { headers: apiHeaders() });
   if (!res.ok) throw new Error(`Earn API ${res.status}`);
   return res.json();
 }
 
 export async function fetchChains(): Promise<EarnChain[]> {
-  const url = tracked('earn/chains', `${EARN_BASE}/v1/earn/chains`);
-  const res = await fetch(url);
+  const url = tracked('earn/chains', `${EARN_BASE}/v1/chains`);
+  const res = await fetch(url, { headers: apiHeaders() });
   if (!res.ok) throw new Error(`Chains ${res.status}`);
   return res.json();
 }
 
 export async function fetchProtocols(): Promise<EarnProtocol[]> {
-  const url = tracked('earn/protocols', `${EARN_BASE}/v1/earn/protocols`);
-  const res = await fetch(url);
+  const url = tracked('earn/protocols', `${EARN_BASE}/v1/protocols`);
+  const res = await fetch(url, { headers: apiHeaders() });
   if (!res.ok) throw new Error(`Protocols ${res.status}`);
   return res.json();
 }
@@ -70,20 +78,16 @@ export async function fetchProtocols(): Promise<EarnProtocol[]> {
 export async function fetchPortfolio(
   userAddress: string,
 ): Promise<PortfolioResponse> {
-  const url = tracked('earn/portfolio', `${EARN_BASE}/v1/earn/portfolio/${userAddress}/positions`);
-  const res = await fetch(url);
+  const url = tracked('earn/portfolio', `${EARN_BASE}/v1/portfolio/${userAddress}/positions`);
+  const res = await fetch(url, { headers: apiHeaders() });
   if (!res.ok) throw new Error(`Portfolio ${res.status}`);
   return res.json();
 }
 
 // ── Composer API (6 endpoints) ─────────────────────────
 
-function composerHeaders(): Record<string, string> {
-  const h: Record<string, string> = {};
-  const key = process.env.NEXT_PUBLIC_LIFI_API_KEY;
-  if (key) h['x-lifi-api-key'] = key;
-  return h;
-}
+// Composer uses the same API key as Earn
+const composerHeaders = apiHeaders;
 
 export async function fetchQuote(params: {
   fromChain: number;
